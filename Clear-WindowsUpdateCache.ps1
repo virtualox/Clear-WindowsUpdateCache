@@ -1,10 +1,9 @@
 ##########
 # Script to Clear the Windows Update Cache to free up diskspace
 # Author: VirtualOx <info@virtualox.io>
-# Version: v1.0, 2019-07-16
+# Version: v1.0.1, 2019-07-16
 # Source: https://github.com/virtualox/Clear-WindowsUpdateCache
 ##########
-#Requires -RunAsAdministrator
 
 function FreeDiskSpace() {
     $OS = Get-WMiobject -Class Win32_operatingsystem
