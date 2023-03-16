@@ -1,79 +1,41 @@
-##########
-# Script to Clear the Windows Update Cache to free up diskspace
-# Author: VirtualOx <info@virtualox.io>
-# Version: v1.0.1, 2019-07-16
-# Source: https://github.com/virtualox/Clear-WindowsUpdateCache
-##########
+# Clear-WindowsUpdateCache
+# Script to clear the Windows Update Cache to free up disk space
 
-function FreeDiskSpace() {
-    $OS = Get-WMiobject -Class Win32_operatingsystem
-    $Disk = Get-WMIObject Win32_Logicaldisk -filter "deviceid='$($os.systemdrive)'" |
-    Select PSComputername,DeviceID,
-    @{Name="FreeGB";Expression={[math]::Round($_.Freespace/1GB,2)}}
-    return $Disk.FreeGB    
+function Get-FreeDiskSpace {
+    $OS = Get-WmiObject -Class Win32_OperatingSystem
+    $Disk = Get-WmiObject Win32_LogicalDisk -Filter "DeviceID='$($os.SystemDrive)'" |
+        Select @{Name="FreeGB";Expression={[math]::Round($_.FreeSpace / 1GB, 2)}}
+    return $Disk.FreeGB
 }
 
-function CheckWUS() {
-    $s = Get-Service wuauserv
-    if ($s.Status -eq "Running") {
-        return 0
-    } else {
-        return 1
-    }
-}
-function StopWUS() {
-     Stop-Service wuauserv -Force
-}
+# Get initial free disk space
+$Before = Get-FreeDiskSpace
+Write-Host "Free Disk Space before: $Before GB" -ForegroundColor Blue
 
-function StartWUS() {
-    Start-Service wuauserv
+# Check Windows Update Service status
+$WUService = Get-Service wuauserv
+
+# Stop Windows Update Service if it's running
+if ($WUService.Status -eq "Running") {
+    Write-Host "Stopping Windows Update Service..." -ForegroundColor Blue
+    $WUService | Stop-Service -Force
 }
 
-function WUSRunning() {
-    Write-Host "Windows Update Service is Running..." -ForegroundColor Red
-    Write-Host " Stopping Windows Update Service..." -ForegroundColor Blue
+# Clean Windows Update Cache
+Write-Host "Cleaning Windows Update Cache..." -ForegroundColor Blue
+$UpdateCachePath = Join-Path $env:windir "SoftwareDistribution\Download"
+Get-ChildItem -Path $UpdateCachePath -Recurse | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
 
-    # Stopping Windows Update Service and check again if it is stopped
-    StopWUS
-    if (CheckWUS) {
-        WUSStopped
-    } else {
-        Write-Host "Can't stop Windows Update Service..." -ForegroundColor Red
-        exit 1
-    }
-    Write-Host "Starting Windows Update Service..." -ForegroundColor Blue
-    
-    # Starting the Windows Update Service again
-    StartWUS
-}
-function WUSStopped() {
-    Write-Host "Windows Update Service is Stopped..." -ForegroundColor Green
-    
-    # Getting free disk space before the cleaning actions
-    Write-Host " Free Disk Space before: " -ForegroundColor Blue -NoNewline
-    $Before = FreeDiskSpace
-    Write-Host "$Before GB"
-    
-    Write-Host " Cleaning Files..." -ForegroundColor Blue -NoNewline
-    Get-ChildItem -LiteralPath $env:windir\SoftwareDistribution\Download\ -Recurse | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
-    Write-Host "Done..." -ForegroundColor Green
+# Start Windows Update Service
+Write-Host "Starting Windows Update Service..." -ForegroundColor Blue
+$WUService | Start-Service
 
-    # Getting free disk space after the cleaning actions
-    Write-Host " Free Disk Space after: " -ForegroundColor Blue -NoNewline
-    $After = FreeDiskSpace
-    Write-Host "$After GB"
+# Get final free disk space
+$After = Get-FreeDiskSpace
+Write-Host "Free Disk Space after: $After GB" -ForegroundColor Blue
 
-    # Calculating the free disk space difference
-    Write-Host " Cleaned: " -ForegroundColor Blue -NoNewline
-    $Cleaned = $After - $Before
-    Write-Host "$Cleaned GB"
-}
+# Calculate and display the freed disk space
+$Cleaned = $After - $Before
+Write-Host "Cleaned: $Cleaned GB" -ForegroundColor Green
 
-# Program
-if (CheckWUS) {
-    WUSStopped
-} else {
-    WUSRunning
-}
 Write-Host "Done..." -ForegroundColor Green
-exit 0
